@@ -39,18 +39,8 @@ total_simulacoes = st.sidebar.slider("Resolução (Simulações)", min_value=100
 
 st.sidebar.divider()
 
-# Dados padrão (Incluindo o CMC 0)
-defaults = {
-    0: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 0, 'G': 0},
-    1: {'magicas': 6, 'W': 0, 'U': 0, 'B': 0, 'R': 2, 'G': 3},
-    2: {'magicas': 22, 'W': 0, 'U': 0, 'B': 0, 'R': 21, 'G': 5},
-    3: {'magicas': 18, 'W': 0, 'U': 0, 'B': 0, 'R': 7, 'G': 16},
-    4: {'magicas': 12, 'W': 0, 'U': 0, 'B': 0, 'R': 11, 'G': 5},
-    5: {'magicas': 6, 'W': 0, 'U': 0, 'B': 0, 'R': 5, 'G': 3},
-    6: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 4, 'G': 0},
-    7: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 0, 'G': 0},
-    8: {'magicas': 1, 'W': 0, 'U': 0, 'B': 0, 'R': 2, 'G': 0},
-}
+# Dados padrão (Agora inicializando tudo zerado)
+defaults = {cmc: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 0, 'G': 0} for cmc in range(0, 9)}
 
 deck_data = {}
 total_magicas_input = 0
@@ -62,7 +52,11 @@ with st.sidebar.form("deck_form"):
     
     # Loop de 0 a 8 para cobrir todos os CMCs
     for cmc in range(0, 9):
-        with st.expander(f"Cartas de Custo (CMC) {cmc}", expanded=(cmc == 1)):
+        # Lê a memória do site para pegar o valor atual (se não existir, é 0)
+        qtd_atual = st.session_state.get(f"mag_{cmc}", 0)
+        
+        # O título agora mostra o número de cartas de forma dinâmica
+        with st.expander(f"Cartas de Custo (CMC) {cmc} - {qtd_atual} cartas", expanded=(cmc == 1)):
             magicas = st.number_input(f"Qtd Mágicas (CMC {cmc})", min_value=0, max_value=99, value=defaults[cmc]['magicas'], step=1, key=f"mag_{cmc}")
             
             st.caption("Pips (Símbolos Coloridos):")
@@ -91,6 +85,9 @@ with st.sidebar.form("deck_form"):
 # Trava de Segurança
 if total_magicas_input >= 99:
     st.error(f"🚨 **ERRO DE LIMITE:** Você inseriu {total_magicas_input} mágicas. O resultado final deve obrigatoriamente cravar em 99 cartas no total. Reduza a quantidade de mágicas na barra lateral para abrir espaço para os terrenos e clique em Processar novamente.")
+    st.stop()
+elif total_magicas_input == 0:
+    st.warning("👈 O seu deck está vazio! Insira as quantidades de mágicas e pips na barra lateral e clique em 'Processar Simulação'.")
     st.stop()
 
 curva_simples = {custo: info['CMC'] for custo, info in deck_data.items()}
