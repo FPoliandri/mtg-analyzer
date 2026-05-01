@@ -55,7 +55,7 @@ with st.sidebar.form("deck_form"):
         # Lê a memória do site para pegar o valor atual (se não existir, é 0)
         qtd_atual = st.session_state.get(f"mag_{cmc}", 0)
         
-        # O título agora mostra o número de cartas de forma dinâmica
+        # O título mostra o número de cartas de forma dinâmica
         with st.expander(f"Cartas de Custo (CMC) {cmc} - {qtd_atual} cartas", expanded=(cmc == 1)):
             magicas = st.number_input(f"Qtd Mágicas (CMC {cmc})", min_value=0, max_value=99, value=defaults[cmc]['magicas'], step=1, key=f"mag_{cmc}")
             
@@ -101,7 +101,6 @@ for info in deck_data.values():
 
 pesos_cores = {cor: 0 for cor in identidade_cores}
 for custo, info in deck_data.items():
-    # Proteção contra erro de divisão por zero (cartas de custo 0)
     custo_base = max(1, custo) 
     urgencia = 1 / (custo_base ** 0.5) 
     for cor, pips in info['pips'].items():
@@ -134,7 +133,8 @@ with col_esquerda:
     st.subheader(f"🎯 Análise (Turno {turno_alvo})")
     st.write("Configurações que atingem 40-50% de sucesso:")
     
-    for t in range(max(20, terrenos_reais - 15), min(60, terrenos_reais + 15)):
+    # CORREÇÃO: Range elástico e protegido contra falhas
+    for t in range(max(0, terrenos_reais - 15), min(100, terrenos_reais + 16)):
         p = simular_land_drops(t, turno_alvo, total_simulacoes)
         if 40 <= p <= 50:
             check = " 🟢 **[ATUAL]**" if t == terrenos_reais else ""
@@ -145,26 +145,32 @@ with col_direita:
     # 5. VISUALIZAÇÃO GRÁFICA
     # ==========================================
     st.subheader("Curva de Probabilidade")
-    range_terrenos = list(range(max(20, terrenos_reais - 8), min(60, terrenos_reais + 8)))
+    
+    # CORREÇÃO: Range elástico para o Gráfico (sem limite fixo de 60)
+    range_terrenos = list(range(max(0, terrenos_reais - 10), min(100, terrenos_reais + 11)))
     
     with st.spinner('Executando simulações...'):
         dados_grafico = [{'T': t, 'P': simular_land_drops(t, turno_alvo, total_simulacoes)} for t in range_terrenos]
         df = pd.DataFrame(dados_grafico)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(df['T'], df['P'], marker='o', color='#2c3e50', linewidth=2, label='Curva de Probabilidade')
+    # Proteção extra para garantir que o DataFrame não esteja vazio
+    if not df.empty:
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(df['T'], df['P'], marker='o', color='#2c3e50', linewidth=2, label='Curva de Probabilidade')
 
-    for i, row in df.iterrows():
-        ax.annotate(f"{row['P']:.1f}%", (row['T'], row['P']), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
+        for i, row in df.iterrows():
+            ax.annotate(f"{row['P']:.1f}%", (row['T'], row['P']), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
 
-    ax.axhspan(40, 50, color='#f1c40f', alpha=0.3, label='Alvo (40-50%)')
-    ax.axvline(x=terrenos_reais, color='#e74c3c', linestyle='--', label=f'Atual ({terrenos_reais}L)')
-    
-    ax.set_title(f"Probabilidade de garantir {turno_alvo} Terrenos no Turno {turno_alvo}", fontsize=10, pad=10)
-    ax.set_xlabel("Quantidade de Terrenos (Total do deck sempre cravado em 99)")
-    ax.set_ylabel("Chance de Sucesso (%)")
-    ax.grid(alpha=0.2)
-    ax.legend(loc='lower right')
-    plt.tight_layout()
-    
-    st.pyplot(fig)
+        ax.axhspan(40, 50, color='#f1c40f', alpha=0.3, label='Alvo (40-50%)')
+        ax.axvline(x=terrenos_reais, color='#e74c3c', linestyle='--', label=f'Atual ({terrenos_reais}L)')
+        
+        ax.set_title(f"Probabilidade de garantir {turno_alvo} Terrenos no Turno {turno_alvo}", fontsize=10, pad=10)
+        ax.set_xlabel("Quantidade de Terrenos (Total do deck sempre cravado em 99)")
+        ax.set_ylabel("Chance de Sucesso (%)")
+        ax.grid(alpha=0.2)
+        ax.legend(loc='lower right')
+        plt.tight_layout()
+        
+        st.pyplot(fig)
+    else:
+        st.warning("Não foi possível gerar o gráfico para os valores atuais.")
