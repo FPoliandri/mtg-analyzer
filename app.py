@@ -31,56 +31,66 @@ def simular_land_drops(qtd_terrenos, turnos_alvo, total_simulacoes):
     return (sucessos / total_simulacoes) * 100
 
 # ==========================================
-# 2. INTERFACE DINÂMICA (Sidebar e Tabela)
+# 2. INTERFACE DINÂMICA (Formulário com Botões)
 # ==========================================
 st.sidebar.header("⚙️ Configurações da Simulação")
 turno_alvo = st.sidebar.slider("Turno Alvo para Drop de Terreno", min_value=1, max_value=10, value=5)
 total_simulacoes = st.sidebar.slider("Resolução (Simulações)", min_value=1000, max_value=20000, step=1000, value=10000)
 
 st.sidebar.divider()
-st.sidebar.header("📝 Inserção do Deck")
-st.sidebar.write("Preencha a quantidade de mágicas e os pips (símbolos coloridos) por custo (CMC):")
 
-# Tabela inicial (Exemplo)
-dados_iniciais = pd.DataFrame({
-    "CMC": [1, 2, 3, 4, 5, 6, 7, 8],
-    "Mágicas": [6, 22, 18, 12, 6, 0, 0, 1],
-    "W (Branco)": [0, 0, 0, 0, 0, 0, 0, 0],
-    "U (Azul)": [0, 0, 0, 0, 0, 0, 0, 0],
-    "B (Preto)": [0, 0, 0, 0, 0, 0, 0, 0],
-    "R (Verm)": [2, 21, 7, 11, 5, 4, 0, 2],
-    "G (Verde)": [3, 5, 16, 5, 3, 0, 0, 0]
-})
+# Dados padrão (Gruul) para carregar inicialmente
+defaults = {
+    1: {'magicas': 6, 'W': 0, 'U': 0, 'B': 0, 'R': 2, 'G': 3},
+    2: {'magicas': 22, 'W': 0, 'U': 0, 'B': 0, 'R': 21, 'G': 5},
+    3: {'magicas': 18, 'W': 0, 'U': 0, 'B': 0, 'R': 7, 'G': 16},
+    4: {'magicas': 12, 'W': 0, 'U': 0, 'B': 0, 'R': 11, 'G': 5},
+    5: {'magicas': 6, 'W': 0, 'U': 0, 'B': 0, 'R': 5, 'G': 3},
+    6: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 4, 'G': 0},
+    7: {'magicas': 0, 'W': 0, 'U': 0, 'B': 0, 'R': 0, 'G': 0},
+    8: {'magicas': 1, 'W': 0, 'U': 0, 'B': 0, 'R': 2, 'G': 0},
+}
 
-# Transformando o DataFrame em uma planilha editável na tela
-deck_df = st.sidebar.data_editor(dados_iniciais, hide_index=True, use_container_width=True)
+deck_data = {}
+total_magicas_input = 0
 
-# Lógica de Proteção: O deck não pode exceder as 99 cartas (sem contar o comandante)
-total_magicas_input = deck_df["Mágicas"].sum()
-if total_magicas_input >= 99:
-    st.sidebar.error(f"🚨 **ERRO:** {total_magicas_input} mágicas inseridas. Reduza para abrir espaço para terrenos.")
-    st.error("O cálculo exige que o deck principal tenha no máximo 98 cartas (para sobrar pelo menos 1 espaço de terreno, totalizando 99). Ajuste os valores na tabela lateral para continuar.")
-    st.stop() # Trava o aplicativo aqui e não renderiza os gráficos com erro
+# Criando o formulário (só processa quando o botão final é clicado)
+with st.sidebar.form("deck_form"):
+    st.header("📝 Inserção do Deck")
+    st.write("Ajuste as quantidades usando os botões de **+** e **-**")
+    
+    for cmc in range(1, 9):
+        # Usamos expanders para não poluir a tela com 40 botões de uma vez
+        with st.expander(f"Cartas de Custo (CMC) {cmc}", expanded=(cmc == 1)):
+            magicas = st.number_input(f"Qtd Mágicas (CMC {cmc})", min_value=0, max_value=99, value=defaults[cmc]['magicas'], step=1, key=f"mag_{cmc}")
+            
+            st.caption("Pips (Símbolos Coloridos):")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            w = c1.number_input("W", min_value=0, value=defaults[cmc]['W'], step=1, key=f"w_{cmc}")
+            u = c2.number_input("U", min_value=0, value=defaults[cmc]['U'], step=1, key=f"u_{cmc}")
+            b = c3.number_input("B", min_value=0, value=defaults[cmc]['B'], step=1, key=f"b_{cmc}")
+            r = c4.number_input("R", min_value=0, value=defaults[cmc]['R'], step=1, key=f"r_{cmc}")
+            g = c5.number_input("G", min_value=0, value=defaults[cmc]['G'], step=1, key=f"g_{cmc}")
+            
+            total_magicas_input += magicas
+            
+            if magicas > 0:
+                pips = {'W': w, 'U': u, 'B': b, 'R': r, 'G': g}
+                pips_limpos = {cor: qtd for cor, qtd in pips.items() if qtd > 0}
+                deck_data[cmc] = {'CMC': magicas, 'pips': pips_limpos}
+
+    st.info("💡 Dica de Deckbuilding: Se precisar remover mágicas para incluir mais terrenos, retirar cartas de custo alto afeta a curva de mana de forma muito mais eficiente do que remover feitiços aleatórios.")
+    
+    # O botão que dispara tudo
+    submit_button = st.form_submit_button("🚀 Processar Simulação", use_container_width=True)
 
 # ==========================================
 # 3. LÓGICA DE IDENTIDADE E URGÊNCIA
 # ==========================================
-# Convertendo a tabela de volta para o formato de dicionário
-deck_data = {}
-for index, row in deck_df.iterrows():
-    cmc = int(row["CMC"])
-    cartas = int(row["Mágicas"])
-    if cartas > 0: # Ignora linhas zeradas
-        pips = {
-            'W': int(row["W (Branco)"]), 
-            'U': int(row["U (Azul)"]),
-            'B': int(row["B (Preto)"]), 
-            'R': int(row["R (Verm)"]), 
-            'G': int(row["G (Verde)"])
-        }
-        # Limpa as cores zeradas
-        pips_limpos = {cor: qtd for cor, qtd in pips.items() if qtd > 0}
-        deck_data[cmc] = {'CMC': cartas, 'pips': pips_limpos}
+# Trava de Segurança
+if total_magicas_input >= 99:
+    st.error(f"🚨 **ERRO DE LIMITE:** Você inseriu {total_magicas_input} mágicas. O resultado final deve obrigatoriamente cravar em 99 cartas no total. Reduza a quantidade de mágicas na barra lateral para abrir espaço para os terrenos e clique em Processar novamente.")
+    st.stop()
 
 curva_simples = {custo: info['CMC'] for custo, info in deck_data.items()}
 total_magicas = sum(curva_simples.values())
@@ -91,10 +101,9 @@ identidade_cores = set()
 for info in deck_data.values():
     identidade_cores.update(info['pips'].keys())
 
-# Cálculo de Pesos (Correlação Cor vs CMC)
 pesos_cores = {cor: 0 for cor in identidade_cores}
 for custo, info in deck_data.items():
-    urgencia = 1 / (custo ** 0.5) # CMC baixo = Peso maior
+    urgencia = 1 / (custo ** 0.5) 
     for cor, pips in info['pips'].items():
         pesos_cores[cor] += pips * urgencia
 
@@ -125,7 +134,6 @@ with col_esquerda:
     st.subheader(f"🎯 Análise (Turno {turno_alvo})")
     st.write("Configurações que atingem 40-50% de sucesso:")
     
-    # Busca dinamicamente os valores de probabilidade aceitáveis
     for t in range(max(20, terrenos_reais - 15), min(60, terrenos_reais + 15)):
         p = simular_land_drops(t, turno_alvo, total_simulacoes)
         if 40 <= p <= 50:
@@ -134,19 +142,18 @@ with col_esquerda:
 
 with col_direita:
     # ==========================================
-    # 5. VISUALIZAÇÃO DE DADOS (Gráfico)
+    # 5. VISUALIZAÇÃO GRÁFICA
     # ==========================================
     st.subheader("Curva de Probabilidade")
     range_terrenos = list(range(max(20, terrenos_reais - 8), min(60, terrenos_reais + 8)))
     
-    with st.spinner('Executando simulações de Monte Carlo...'):
+    with st.spinner('Executando simulações...'):
         dados_grafico = [{'T': t, 'P': simular_land_drops(t, turno_alvo, total_simulacoes)} for t in range_terrenos]
         df = pd.DataFrame(dados_grafico)
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(df['T'], df['P'], marker='o', color='#2c3e50', linewidth=2, label='Curva de Probabilidade')
 
-    # Adicionando rótulos nos pontos do gráfico
     for i, row in df.iterrows():
         ax.annotate(f"{row['P']:.1f}%", (row['T'], row['P']), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
 
@@ -154,7 +161,7 @@ with col_direita:
     ax.axvline(x=terrenos_reais, color='#e74c3c', linestyle='--', label=f'Atual ({terrenos_reais}L)')
     
     ax.set_title(f"Probabilidade de garantir {turno_alvo} Terrenos no Turno {turno_alvo}", fontsize=10, pad=10)
-    ax.set_xlabel("Quantidade de Terrenos (Total do deck cravado em 99)")
+    ax.set_xlabel("Quantidade de Terrenos (Total do deck sempre cravado em 99)")
     ax.set_ylabel("Chance de Sucesso (%)")
     ax.grid(alpha=0.2)
     ax.legend(loc='lower right')
