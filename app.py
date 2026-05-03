@@ -44,7 +44,9 @@ def simular_sweet_spot(qtd_terrenos, alvo_efetivo, total_simulacoes):
 # ==========================================
 st.sidebar.header("⚙️ Configurações Principais")
 cmc_comandante = st.sidebar.number_input("Custo do Comandante (CMC)", min_value=0, max_value=16, value=4, step=1)
-total_simulacoes = st.sidebar.slider("Resolução (Simulações)", min_value=1000, max_value=20000, step=1000, value=10000)
+
+# Quantidade de simulações travada em 15.000 para balancear performance e precisão estatística
+total_simulacoes = 15000
 
 st.sidebar.divider()
 
@@ -174,7 +176,7 @@ with col_direita:
     if st.session_state.get('processar') and st.session_state.get('deck_hash') == current_hash:
         range_terrenos = list(range(max(0, terrenos_reais - 15), min(100, terrenos_reais + 16)))
         
-        with st.spinner('Executando simulações de Monte Carlo...'):
+        with st.spinner('Executando 15.000 simulações de Monte Carlo...'):
             dados_grafico = [{'T': t, 'P': simular_sweet_spot(t, alvo_efetivo, total_simulacoes)} for t in range_terrenos]
             df = pd.DataFrame(dados_grafico)
 
@@ -209,7 +211,7 @@ st.divider()
 with st.expander("📚 Entenda a Matemática e a Lógica do Simulador"):
     st.markdown("""
     ### 1. O Método de Monte Carlo
-    Em vez de usar fórmulas estatísticas fixas de combinatória (como a Distribuição Hipergeométrica), este simulador usa o **Método de Monte Carlo**. A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos milhares de vezes (definido por você na barra lateral). A porcentagem exibida é a razão empírica de quantas vezes o cenário desejado aconteceu com sucesso.
+    Em vez de usar fórmulas estatísticas fixas de combinatória (como a Distribuição Hipergeométrica), este simulador usa o **Método de Monte Carlo**. A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos 15.000 vezes. A porcentagem exibida é a razão empírica de quantas vezes o cenário desejado aconteceu com sucesso.
 
     ### 2. O Cálculo do "Alvo Efetivo" (A Tensão entre Comandante e Deck)
     Simuladores comuns costumam sugerir terrenos focados em atingir mana em turnos altos, o que invariavelmente gera *Mana Flood*. Este painel calcula um alvo matemático dinâmico, baseado na teoria de *Floor and Ceiling* (Asfalto e Teto):
