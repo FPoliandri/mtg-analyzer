@@ -59,7 +59,7 @@ def simular_sweet_spot(qtd_terrenos, qtd_ramp, alvo_efetivo, total_simulacoes):
 st.sidebar.header("⚙️ Configurações Principais")
 cmc_comandante = st.sidebar.number_input("Custo do Comandante (CMC)", min_value=0, max_value=16, value=4, step=1)
 # NOVO CAMPO: Informando ao simulador quantas cartas da sua lista geram mana
-qtd_ramp = st.sidebar.number_input("Qtd de Pedras de Mana / Ramp", min_value=0, max_value=30, value=10, step=1, help="Ex: Sol Ring, Arcane Signet, Cultivate, Elfos de Mana. Eles assumem parte do peso dos terrenos.")
+qtd_ramp = st.sidebar.number_input("Qtd de Pedras de Mana / Ramp", min_value=0, max_value=30, value=0, step=1, help="Ex: Sol Ring, Arcane Signet, Cultivate, Elfos de Mana. Eles assumem parte do peso dos terrenos.")
 
 total_simulacoes = 15000
 
