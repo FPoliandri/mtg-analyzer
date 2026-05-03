@@ -1,13 +1,3 @@
-A peça final do quebra-cabeça estatístico! Com essa adição, o simulador resolve a eterna briga entre **Volume** (ter mana suficiente) e **Correção** (ter a cor certa na hora certa).
-
-A lógica que implementei no código abaixo é o que chamamos de **Ancoragem de Identidade**. 
-Os *pips* (símbolos coloridos) do seu comandante recebem um "passe VIP" na matemática. Enquanto uma mágica normal de custo 4 recebe um peso de urgência de `0.5`, cada símbolo do comandante recebe um peso artificial e absoluto de `2.0`. 
-
-Isso força a calculadora de Proporção Sugerida a blindar a sua base de mana, garantindo que o seu deck tenha terrenos suficientes para gerar as cores do comandante, independentemente de quão distorcida seja a curva de cores do resto do deck.
-
-Adicionei os botões de cor do Comandante na barra lateral, logo abaixo do custo dele. Aqui está o código completo e definitivo do seu `app.py`:
-
-```python
 import streamlit as st
 import random
 import pandas as pd
@@ -273,4 +263,3 @@ with st.expander("📚 Entenda a Matemática e a Lógica do Simulador"):
     O sistema atribui um peso a cada símbolo baseado na fórmula de **Decaimento por Raiz Quadrada** ($1 / \\sqrt{CMC}$). Símbolos de cartas baratas exigem fontes de mana com mais urgência do que cartas de custo 6.
     *   **Ancoragem do Comandante:** Para evitar que o deck te deixe sem as cores do seu comandante, os símbolos de mana presentes no custo dele recebem prioridade máxima e absoluta no algoritmo (Peso multiplicador de 2.0). Isso blinda o painel de "Proporção Sugerida" e garante que a matemática sempre proteja a cor da sua condição de vitória.
     """)
-```
