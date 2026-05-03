@@ -10,13 +10,11 @@ st.set_page_config(page_title="MTG Commander Analytics", layout="wide")
 st.title("🧙‍♂️ Analisador Dinâmico de Commander")
 st.markdown("Simulador estatístico avançado focado na busca do **Sweet Spot** (Janela ideal sem *Screw* e sem *Flood*).")
 
-# Memória do aplicativo
 if 'processar' not in st.session_state:
     st.session_state['processar'] = False
 if 'deck_hash' not in st.session_state:
     st.session_state['deck_hash'] = None
 
-# Dicionário visual para as cores de mana
 simbolos_mana = {
     'W': '⚪ Branco (W)', 
     'U': '🔵 Azul (U)', 
@@ -33,28 +31,36 @@ def calcular_cmc_medio(curva_mana):
     if total_cartas == 0: return 0
     return sum(cmc * qtd for cmc, qtd in curva_mana.items()) / total_cartas
 
-def simular_sweet_spot(qtd_terrenos, alvo_efetivo, total_simulacoes):
+def simular_sweet_spot(qtd_terrenos, qtd_ramp, alvo_efetivo, total_simulacoes):
     sucessos = 0
+    # Regra de sobrevivência: Você precisa de no mínimo 2 terrenos para conjurar a maioria dos ramps (ou 1 se o alvo for muito agressivo)
+    terrenos_minimos = min(2, alvo_efetivo) 
+    
     for _ in range(total_simulacoes):
-        deck = ['L'] * qtd_terrenos + ['X'] * (99 - qtd_terrenos)
+        # O deck agora tem 3 tipos de cartas: L (Terrenos), R (Ramp) e X (Mágicas normais)
+        qtd_x = max(0, 99 - qtd_terrenos - qtd_ramp)
+        deck = ['L'] * qtd_terrenos + ['R'] * qtd_ramp + ['X'] * qtd_x
         random.shuffle(deck)
-        # Mão inicial (7) + compras até o turno alvo
+        
         mao = deck[:7 + alvo_efetivo]
         terrenos_na_mao = mao.count('L')
+        ramp_na_mao = mao.count('R')
+        mana_total = terrenos_na_mao + ramp_na_mao
         
-        # O Sweet Spot: Exigimos o mínimo do Alvo Efetivo, e no máximo +1 terreno.
-        if alvo_efetivo <= terrenos_na_mao <= alvo_efetivo + 1:
+        # O Sweet Spot: Bater o alvo de mana somando Terrenos + Ramp (E ter terrenos suficientes para castar o ramp)
+        if terrenos_na_mao >= terrenos_minimos and (alvo_efetivo <= mana_total <= alvo_efetivo + 1):
             sucessos += 1
             
     return (sucessos / total_simulacoes) * 100
 
 # ==========================================
-# 2. INTERFACE DINÂMICA (Sem Formulário)
+# 2. INTERFACE DINÂMICA (Barra Lateral)
 # ==========================================
 st.sidebar.header("⚙️ Configurações Principais")
 cmc_comandante = st.sidebar.number_input("Custo do Comandante (CMC)", min_value=0, max_value=16, value=4, step=1)
+# NOVO CAMPO: Informando ao simulador quantas cartas da sua lista geram mana
+qtd_ramp = st.sidebar.number_input("Qtd de Pedras de Mana / Ramp", min_value=0, max_value=30, value=10, step=1, help="Ex: Sol Ring, Arcane Signet, Cultivate, Elfos de Mana. Eles assumem parte do peso dos terrenos.")
 
-# Quantidade de simulações travada em 15.000 para balancear performance e precisão estatística
 total_simulacoes = 15000
 
 st.sidebar.divider()
@@ -74,7 +80,6 @@ for cmc in range(0, 9):
         
         st.caption("Pips (Símbolos Coloridos):")
         c1, c2, c3, c4, c5 = st.columns(5)
-        # Interface atualizada com os símbolos coloridos
         w = c1.number_input("⚪ W", min_value=0, value=defaults[cmc]['W'], step=1, key=f"w_{cmc}")
         u = c2.number_input("🔵 U", min_value=0, value=defaults[cmc]['U'], step=1, key=f"u_{cmc}")
         b = c3.number_input("⚫ B", min_value=0, value=defaults[cmc]['B'], step=1, key=f"b_{cmc}")
@@ -90,7 +95,7 @@ for cmc in range(0, 9):
 
 if st.sidebar.button("🚀 Processar Simulação de Sweet Spot", use_container_width=True, type="primary"):
     st.session_state['processar'] = True
-    st.session_state['deck_hash'] = hash(str(deck_data) + str(cmc_comandante) + str(total_simulacoes))
+    st.session_state['deck_hash'] = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp))
 
 # ==========================================
 # 3. LÓGICA DE IDENTIDADE E ALVO EFETIVO
@@ -101,13 +106,15 @@ if total_magicas_input >= 99:
 elif total_magicas_input == 0:
     st.warning("👈 O seu deck está vazio! Insira as cartas na barra lateral.")
     st.stop()
+elif qtd_ramp > total_magicas_input:
+    st.error("🚨 Você não pode ter mais Ramps do que o total de mágicas do deck!")
+    st.stop()
 
 curva_simples = {custo: info['CMC'] for custo, info in deck_data.items()}
 total_magicas = sum(curva_simples.values())
 terrenos_reais = 99 - total_magicas
 cmc_medio = calcular_cmc_medio(curva_simples)
 
-# Filtro Inteligente do Comandante
 if cmc_comandante <= 2:
     cmc_ajustado = 3
 elif cmc_comandante >= 7:
@@ -115,7 +122,6 @@ elif cmc_comandante >= 7:
 else:
     cmc_ajustado = cmc_comandante
 
-# Cálculo do Alvo Efetivo
 alvo_efetivo = max(1, round((cmc_ajustado + cmc_medio + 1) / 2))
 
 identidade_cores = set()
@@ -129,13 +135,13 @@ for custo, info in deck_data.items():
     for cor, pips in info['pips'].items():
         pesos_cores[cor] += pips * urgencia
 
-current_hash = hash(str(deck_data) + str(cmc_comandante) + str(total_simulacoes))
+current_hash = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp))
 
 # ==========================================
 # 4. DASHBOARD DE RESULTADOS
 # ==========================================
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Mágicas", total_magicas)
+col1.metric("Mágicas (Incluindo Ramp)", total_magicas)
 col2.metric("Terrenos Restantes", terrenos_reais)
 col3.metric("CMC Médio do Deck", f"{cmc_medio:.2f}")
 col4.metric("🎯 Alvo Efetivo (Turno)", alvo_efetivo, help="Calculado pela tensão entre o CMC do Comandante e a curva do Deck.")
@@ -154,21 +160,21 @@ with col_esquerda:
         for cor in sorted(pesos_cores.keys()):
             proporcao = pesos_cores[cor] / total_pesos
             fontes = round(proporcao * terrenos_reais)
-            # Aplicando a melhoria visual aqui no painel final também
             nome_cor_visual = simbolos_mana.get(cor, cor)
             st.write(f"**{nome_cor_visual}:** {fontes} fontes (Peso: {pesos_cores[cor]:.2f})")
     else:
         st.write("Deck Incolor ou sem pips cadastrados.")
     
     st.subheader(f"📊 Análise de Consistência")
-    st.write(f"Buscando **{alvo_efetivo} ou {alvo_efetivo + 1} terrenos** no Turno **{alvo_efetivo}**:")
+    st.write(f"Buscando **{alvo_efetivo} ou {alvo_efetivo + 1} Fontes de Mana** (Terrenos + Ramp) no Turno **{alvo_efetivo}**:")
     
     if st.session_state.get('processar') and st.session_state.get('deck_hash') == current_hash:
         st.write("Configurações com maior equilíbrio (Pico do Sino):")
         
         resultados = []
-        for t in range(max(0, terrenos_reais - 15), min(100, terrenos_reais + 16)):
-            p = simular_sweet_spot(t, alvo_efetivo, total_simulacoes)
+        # O teto do range agora respeita o limite físico tirando as pedras de mana
+        for t in range(max(0, terrenos_reais - 15), min(99 - qtd_ramp, terrenos_reais + 16)):
+            p = simular_sweet_spot(t, qtd_ramp, alvo_efetivo, total_simulacoes)
             resultados.append((t, p))
             
         bons_resultados = [r for r in resultados if r[1] >= 40]
@@ -177,7 +183,7 @@ with col_esquerda:
             st.write(f"- **{p:.1f}%** -> {t} Lands / {99-t} Mágicas{check}")
             
         if not bons_resultados:
-            st.write("Nenhuma configuração alcançou 40%+ de consistência. A curva de mana e o custo do comandante podem estar muito distantes.")
+            st.write("Nenhuma configuração alcançou 40%+ de consistência. Seu deck precisa de mais ramp ou uma curva mais baixa.")
     else:
         st.write("_Aguardando processamento..._")
 
@@ -186,10 +192,10 @@ with col_direita:
     st.markdown("*A penalidade de **Flood** e **Screw** faz a curva cair nas extremidades.*")
     
     if st.session_state.get('processar') and st.session_state.get('deck_hash') == current_hash:
-        range_terrenos = list(range(max(0, terrenos_reais - 15), min(100, terrenos_reais + 16)))
+        range_terrenos = list(range(max(0, terrenos_reais - 15), min(99 - qtd_ramp, terrenos_reais + 16)))
         
         with st.spinner('Executando 15.000 simulações de Monte Carlo...'):
-            dados_grafico = [{'T': t, 'P': simular_sweet_spot(t, alvo_efetivo, total_simulacoes)} for t in range_terrenos]
+            dados_grafico = [{'T': t, 'P': simular_sweet_spot(t, qtd_ramp, alvo_efetivo, total_simulacoes)} for t in range_terrenos]
             df = pd.DataFrame(dados_grafico)
 
         if not df.empty:
@@ -202,7 +208,7 @@ with col_direita:
 
             ax.axvline(x=terrenos_reais, color='#e74c3c', linestyle='--', label=f'Atual ({terrenos_reais}L)')
             
-            ax.set_title(f"Pico de Otimização para Turno {alvo_efetivo} (Combinação Comandante + Deck)", fontsize=10, pad=10)
+            ax.set_title(f"Pico de Otimização para Turno {alvo_efetivo} (Combinação Comandante + Deck + {qtd_ramp} Ramps)", fontsize=10, pad=10)
             ax.set_xlabel("Quantidade de Terrenos (Deck cravado em 99)")
             ax.set_ylabel("Chance de Sweet Spot (%)")
             ax.grid(alpha=0.2)
@@ -223,29 +229,20 @@ st.divider()
 with st.expander("📚 Entenda a Matemática e a Lógica do Simulador"):
     st.markdown("""
     ### 1. O Método de Monte Carlo
-    Em vez de usar fórmulas estatísticas fixas de combinatória (como a Distribuição Hipergeométrica), este simulador usa o **Método de Monte Carlo**. A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos 15.000 vezes. A porcentagem exibida é a razão empírica de quantas vezes o cenário desejado aconteceu com sucesso.
+    Em vez de usar fórmulas estatísticas fixas de combinatória (como a Distribuição Hipergeométrica), este simulador usa o **Método de Monte Carlo**. A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos 15.000 vezes.
 
-    ### 2. O Cálculo do "Alvo Efetivo" (A Tensão entre Comandante e Deck)
+    ### 2. Pedras de Mana (Ramp) e a "Regra da Mão Morta"
+    Decks competitivos de Commander rodam com ~35 terrenos porque compensam o restante com *Ramp* (Sol Ring, Signets, etc). O código entende isso e junta Terrenos + Ramp em um único "Pote de Mana".
+    *   **A Mão Morta:** A simulação é inteligente o suficiente para saber que uma mão cheia de pedras de mana sem terrenos não funciona. Para a simulação dar sucesso, você deve atingir o Alvo Efetivo de mana, *porém*, tendo comprado no mínimo 2 terrenos reais para conseguir dar os primeiros passos no jogo.
+
+    ### 3. O Cálculo do "Alvo Efetivo" (A Tensão entre Comandante e Deck)
     Simuladores comuns costumam sugerir terrenos focados em atingir mana em turnos altos, o que invariavelmente gera *Mana Flood*. Este painel calcula um alvo matemático dinâmico, baseado na teoria de *Floor and Ceiling* (Asfalto e Teto):
-    
-    *   **O Filtro do Comandante:** Comandantes muito baratos (CMC 0, 1 ou 2) são artificialmente elevados para 3 na conta, assumindo que você precisa de mana residual para protegê-los. Comandantes caros (CMC 7 ou 8+) têm seu peso reduzido em 2, assumindo que a responsabilidade da rampa final passa a ser de *Mana Rocks* e feitiços, não de *Land Drops* passivos.
-    *   **A Fórmula:** O simulador cria uma média tensionada entre a necessidade do Comandante e o peso real do seu Deck.
-    
-    $$Alvo\_Efetivo=\\frac{CMC\_Comandante\_Ajustado + (CMC\_Medio\_Deck + 1)}{2}$$
-    
-    *(O '+1' garante folga matemática para conjurar mais de uma mágica por turno no mid-game).*
+    *   **O Filtro do Comandante:** Comandantes muito baratos (CMC 0, 1 ou 2) são elevados para 3 na conta, assumindo que você precisa de mana para protegê-los. Comandantes caros (CMC 7 ou 8+) têm seu peso reduzido em 2, assumindo que a responsabilidade da rampa final passa a ser de *Mana Rocks*, não de *Land Drops*.
+    *   **A Fórmula:** $$Alvo\_Efetivo=\\frac{CMC\_Comandante\_Ajustado + (CMC\_Medio\_Deck + 1)}{2}$$
 
-    ### 3. A Janela do "Sweet Spot" (Gráfico em Formato de Sino)
-    Após calcular o *Alvo Efetivo*, o Monte Carlo roda com uma exigência rigorosa. Para uma simulação ser contada como sucesso, a mão avaliada deve ter:
-    *   **No Mínimo:** A quantidade de terrenos do *Alvo Efetivo* (para evitar o **Mana Screw**, cenário onde você não consegue conjurar seu comandante).
-    *   **No Máximo:** O *Alvo Efetivo* mais 1 terreno de segurança (para evitar o **Mana Flood**, cenário onde você possui mana sobrando, mas não tem cartas de ação na mão).
-    Essa limitação bilateral é o que transforma o gráfico de uma linha reta em um "Sino de Gauss", onde o pico mostra a zona de equilíbrio perfeita.
-
-    ### 4. Identidade e Urgência de Cores
-    Simplesmente somar os símbolos de mana impresso não resolve a matemática da base de mana. Um *pip* verde em uma carta de custo 1 exige o terreno no primeiro turno, enquanto um *pip* verde em uma carta de custo 6 permite que você ache a fonte de mana ao longo do jogo.
-    O sistema atribui um peso a cada símbolo baseado na fórmula de **Decaimento por Raiz Quadrada**:
-    
-    $$Urg\\text{\\^e}ncia=\\frac{1}{\\sqrt{CMC}}$$
-    
-    Símbolos de cartas baratas puxam matematicamente a sugestão proporcional das suas fontes de mana básicas para garantir *plays* iniciais consistentes.
+    ### 4. A Janela do "Sweet Spot" (Gráfico em Formato de Sino)
+    A mão avaliada deve ter:
+    *   **No Mínimo:** A quantidade de Fontes do *Alvo Efetivo* (evitando o **Mana Screw**).
+    *   **No Máximo:** O *Alvo Efetivo* mais 1 Fonte de segurança (evitando o **Mana Flood**).
+    Essa limitação transforma o gráfico em um "Sino de Gauss", onde o pico mostra a zona perfeita para o seu deck rodar com consistência máxima sem comprar terrenos à toa.
     """)
