@@ -1,3 +1,13 @@
+A peça final do quebra-cabeça estatístico! Com essa adição, o simulador resolve a eterna briga entre **Volume** (ter mana suficiente) e **Correção** (ter a cor certa na hora certa).
+
+A lógica que implementei no código abaixo é o que chamamos de **Ancoragem de Identidade**. 
+Os *pips* (símbolos coloridos) do seu comandante recebem um "passe VIP" na matemática. Enquanto uma mágica normal de custo 4 recebe um peso de urgência de `0.5`, cada símbolo do comandante recebe um peso artificial e absoluto de `2.0`. 
+
+Isso força a calculadora de Proporção Sugerida a blindar a sua base de mana, garantindo que o seu deck tenha terrenos suficientes para gerar as cores do comandante, independentemente de quão distorcida seja a curva de cores do resto do deck.
+
+Adicionei os botões de cor do Comandante na barra lateral, logo abaixo do custo dele. Aqui está o código completo e definitivo do seu `app.py`:
+
+```python
 import streamlit as st
 import random
 import pandas as pd
@@ -33,11 +43,9 @@ def calcular_cmc_medio(curva_mana):
 
 def simular_sweet_spot(qtd_terrenos, qtd_ramp, alvo_efetivo, total_simulacoes):
     sucessos = 0
-    # Regra de sobrevivência: Você precisa de no mínimo 2 terrenos para conjurar a maioria dos ramps (ou 1 se o alvo for muito agressivo)
     terrenos_minimos = min(2, alvo_efetivo) 
     
     for _ in range(total_simulacoes):
-        # O deck agora tem 3 tipos de cartas: L (Terrenos), R (Ramp) e X (Mágicas normais)
         qtd_x = max(0, 99 - qtd_terrenos - qtd_ramp)
         deck = ['L'] * qtd_terrenos + ['R'] * qtd_ramp + ['X'] * qtd_x
         random.shuffle(deck)
@@ -47,7 +55,6 @@ def simular_sweet_spot(qtd_terrenos, qtd_ramp, alvo_efetivo, total_simulacoes):
         ramp_na_mao = mao.count('R')
         mana_total = terrenos_na_mao + ramp_na_mao
         
-        # O Sweet Spot: Bater o alvo de mana somando Terrenos + Ramp (E ter terrenos suficientes para castar o ramp)
         if terrenos_na_mao >= terrenos_minimos and (alvo_efetivo <= mana_total <= alvo_efetivo + 1):
             sucessos += 1
             
@@ -57,9 +64,20 @@ def simular_sweet_spot(qtd_terrenos, qtd_ramp, alvo_efetivo, total_simulacoes):
 # 2. INTERFACE DINÂMICA (Barra Lateral)
 # ==========================================
 st.sidebar.header("⚙️ Configurações Principais")
-cmc_comandante = st.sidebar.number_input("Custo do Comandante (CMC)", min_value=0, max_value=16, value=0, step=1)
-# NOVO CAMPO: Informando ao simulador quantas cartas da sua lista geram mana
-qtd_ramp = st.sidebar.number_input("Qtd de Pedras de Mana / Ramp", min_value=0, max_value=30, value=0, step=1, help="Ex: Sol Ring, Arcane Signet, Cultivate, Elfos de Mana. Eles assumem parte do peso dos terrenos.")
+cmc_comandante = st.sidebar.number_input("Custo do Comandante (CMC)", min_value=0, max_value=16, value=4, step=1)
+
+# NOVO: Ancoragem de Cores do Comandante
+st.sidebar.caption("Símbolos do Comandante (Color Fixing):")
+cc1, cc2, cc3, cc4, cc5 = st.sidebar.columns(5)
+cmd_w = cc1.number_input("⚪", min_value=0, step=1, key="cmd_w")
+cmd_u = cc2.number_input("🔵", min_value=0, step=1, key="cmd_u")
+cmd_b = cc3.number_input("⚫", min_value=0, step=1, key="cmd_b")
+cmd_r = cc4.number_input("🔴", min_value=0, step=1, key="cmd_r")
+cmd_g = cc5.number_input("🟢", min_value=0, step=1, key="cmd_g")
+
+pips_comandante = {'W': cmd_w, 'U': cmd_u, 'B': cmd_b, 'R': cmd_r, 'G': cmd_g}
+
+qtd_ramp = st.sidebar.number_input("Qtd de Pedras de Mana / Ramp", min_value=0, max_value=30, value=0, step=1, help="Ex: Sol Ring, Arcane Signet, Cultivate, Elfos de Mana.")
 
 total_simulacoes = 15000
 
@@ -93,9 +111,10 @@ for cmc in range(0, 9):
             pips_limpos = {cor: qtd for cor, qtd in pips.items() if qtd > 0}
             deck_data[cmc] = {'CMC': magicas, 'pips': pips_limpos}
 
+# A chave do hash agora inclui os pips do comandante para que o site perceba a alteração
 if st.sidebar.button("🚀 Processar Simulação de Sweet Spot", use_container_width=True, type="primary"):
     st.session_state['processar'] = True
-    st.session_state['deck_hash'] = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp))
+    st.session_state['deck_hash'] = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp) + str(pips_comandante))
 
 # ==========================================
 # 3. LÓGICA DE IDENTIDADE E ALVO EFETIVO
@@ -124,18 +143,29 @@ else:
 
 alvo_efetivo = max(1, round((cmc_ajustado + cmc_medio + 1) / 2))
 
+# Mapeando todas as cores (Deck + Comandante)
 identidade_cores = set()
 for info in deck_data.values():
     identidade_cores.update(info['pips'].keys())
+for cor, qtd in pips_comandante.items():
+    if qtd > 0:
+        identidade_cores.add(cor)
 
 pesos_cores = {cor: 0 for cor in identidade_cores}
+
+# Pesos do Deck (Raiz Quadrada da Urgência)
 for custo, info in deck_data.items():
     custo_base = max(1, custo) 
     urgencia = 1 / (custo_base ** 0.5) 
     for cor, pips in info['pips'].items():
         pesos_cores[cor] += pips * urgencia
 
-current_hash = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp))
+# Pesos do Comandante (Ancoragem com prioridade máxima = 2.0)
+for cor, qtd in pips_comandante.items():
+    if qtd > 0:
+        pesos_cores[cor] += qtd * 2.0
+
+current_hash = hash(str(deck_data) + str(cmc_comandante) + str(qtd_ramp) + str(pips_comandante))
 
 # ==========================================
 # 4. DASHBOARD DE RESULTADOS
@@ -154,7 +184,7 @@ st.divider()
 col_esquerda, col_direita = st.columns([1, 2])
 
 with col_esquerda:
-    st.subheader("🎨 Proporção Sugerida")
+    st.subheader("🎨 Proporção Sugerida (Color Fixing)")
     total_pesos = sum(pesos_cores.values())
     if total_pesos > 0:
         for cor in sorted(pesos_cores.keys()):
@@ -165,14 +195,13 @@ with col_esquerda:
     else:
         st.write("Deck Incolor ou sem pips cadastrados.")
     
-    st.subheader(f"📊 Análise de Consistência")
+    st.subheader(f"📊 Análise de Volume")
     st.write(f"Buscando **{alvo_efetivo} ou {alvo_efetivo + 1} Fontes de Mana** (Terrenos + Ramp) no Turno **{alvo_efetivo}**:")
     
     if st.session_state.get('processar') and st.session_state.get('deck_hash') == current_hash:
         st.write("Configurações com maior equilíbrio (Pico do Sino):")
         
         resultados = []
-        # O teto do range agora respeita o limite físico tirando as pedras de mana
         for t in range(max(0, terrenos_reais - 15), min(99 - qtd_ramp, terrenos_reais + 16)):
             p = simular_sweet_spot(t, qtd_ramp, alvo_efetivo, total_simulacoes)
             resultados.append((t, p))
@@ -228,21 +257,20 @@ st.divider()
 
 with st.expander("📚 Entenda a Matemática e a Lógica do Simulador"):
     st.markdown("""
-    ### 1. O Método de Monte Carlo
-    Em vez de usar fórmulas estatísticas fixas de combinatória (como a Distribuição Hipergeométrica), este simulador usa o **Método de Monte Carlo**. A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos 15.000 vezes.
+    ### 1. O Método de Monte Carlo (Volume)
+    A cada clique em processar, o código cria um deck virtual na memória do servidor, embaralha as cartas, compra a mão inicial e simula a sua compra de turnos 15.000 vezes.
 
     ### 2. Pedras de Mana (Ramp) e a "Regra da Mão Morta"
     Decks competitivos de Commander rodam com ~35 terrenos porque compensam o restante com *Ramp* (Sol Ring, Signets, etc). O código entende isso e junta Terrenos + Ramp em um único "Pote de Mana".
-    *   **A Mão Morta:** A simulação é inteligente o suficiente para saber que uma mão cheia de pedras de mana sem terrenos não funciona. Para a simulação dar sucesso, você deve atingir o Alvo Efetivo de mana, *porém*, tendo comprado no mínimo 2 terrenos reais para conseguir dar os primeiros passos no jogo.
+    *   **A Mão Morta:** A simulação é inteligente o suficiente para saber que uma mão cheia de pedras sem terrenos não funciona. Para a simulação dar sucesso, você deve atingir o Alvo Efetivo de mana, *porém*, tendo comprado no mínimo 2 terrenos reais para dar os primeiros passos.
 
     ### 3. O Cálculo do "Alvo Efetivo" (A Tensão entre Comandante e Deck)
-    Simuladores comuns costumam sugerir terrenos focados em atingir mana em turnos altos, o que invariavelmente gera *Mana Flood*. Este painel calcula um alvo matemático dinâmico, baseado na teoria de *Floor and Ceiling* (Asfalto e Teto):
-    *   **O Filtro do Comandante:** Comandantes muito baratos (CMC 0, 1 ou 2) são elevados para 3 na conta, assumindo que você precisa de mana para protegê-los. Comandantes caros (CMC 7 ou 8+) têm seu peso reduzido em 2, assumindo que a responsabilidade da rampa final passa a ser de *Mana Rocks*, não de *Land Drops*.
-    *   **A Fórmula:** $$Alvo\_Efetivo=\\frac{CMC\_Comandante\_Ajustado + (CMC\_Medio\_Deck + 1)}{2}$$
+    Este painel calcula um alvo matemático dinâmico, baseado na teoria de *Floor and Ceiling* (Asfalto e Teto):
+    *   **O Filtro do Comandante:** Comandantes muito baratos (CMC 0, 1 ou 2) são elevados para 3 na conta. Comandantes caros (CMC 7 ou 8+) têm seu peso reduzido em 2.
+    *   **A Fórmula:** O alvo balanceia o custo da sua mágica mais importante (o Comandante) e o peso real do seu baralho.
 
-    ### 4. A Janela do "Sweet Spot" (Gráfico em Formato de Sino)
-    A mão avaliada deve ter:
-    *   **No Mínimo:** A quantidade de Fontes do *Alvo Efetivo* (evitando o **Mana Screw**).
-    *   **No Máximo:** O *Alvo Efetivo* mais 1 Fonte de segurança (evitando o **Mana Flood**).
-    Essa limitação transforma o gráfico em um "Sino de Gauss", onde o pico mostra a zona perfeita para o seu deck rodar com consistência máxima sem comprar terrenos à toa.
+    ### 4. Correção de Cores (*Color Fixing*) e Ancoragem
+    O sistema atribui um peso a cada símbolo baseado na fórmula de **Decaimento por Raiz Quadrada** ($1 / \\sqrt{CMC}$). Símbolos de cartas baratas exigem fontes de mana com mais urgência do que cartas de custo 6.
+    *   **Ancoragem do Comandante:** Para evitar que o deck te deixe sem as cores do seu comandante, os símbolos de mana presentes no custo dele recebem prioridade máxima e absoluta no algoritmo (Peso multiplicador de 2.0). Isso blinda o painel de "Proporção Sugerida" e garante que a matemática sempre proteja a cor da sua condição de vitória.
     """)
+```
