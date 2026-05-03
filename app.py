@@ -16,6 +16,15 @@ if 'processar' not in st.session_state:
 if 'deck_hash' not in st.session_state:
     st.session_state['deck_hash'] = None
 
+# Dicionário visual para as cores de mana
+simbolos_mana = {
+    'W': '⚪ Branco (W)', 
+    'U': '🔵 Azul (U)', 
+    'B': '⚫ Preto (B)', 
+    'R': '🔴 Vermelho (R)', 
+    'G': '🟢 Verde (G)'
+}
+
 # ==========================================
 # 1. FUNÇÕES TÉCNICAS (Cálculo e Simulação)
 # ==========================================
@@ -65,11 +74,12 @@ for cmc in range(0, 9):
         
         st.caption("Pips (Símbolos Coloridos):")
         c1, c2, c3, c4, c5 = st.columns(5)
-        w = c1.number_input("W", min_value=0, value=defaults[cmc]['W'], step=1, key=f"w_{cmc}")
-        u = c2.number_input("U", min_value=0, value=defaults[cmc]['U'], step=1, key=f"u_{cmc}")
-        b = c3.number_input("B", min_value=0, value=defaults[cmc]['B'], step=1, key=f"b_{cmc}")
-        r = c4.number_input("R", min_value=0, value=defaults[cmc]['R'], step=1, key=f"r_{cmc}")
-        g = c5.number_input("G", min_value=0, value=defaults[cmc]['G'], step=1, key=f"g_{cmc}")
+        # Interface atualizada com os símbolos coloridos
+        w = c1.number_input("⚪ W", min_value=0, value=defaults[cmc]['W'], step=1, key=f"w_{cmc}")
+        u = c2.number_input("🔵 U", min_value=0, value=defaults[cmc]['U'], step=1, key=f"u_{cmc}")
+        b = c3.number_input("⚫ B", min_value=0, value=defaults[cmc]['B'], step=1, key=f"b_{cmc}")
+        r = c4.number_input("🔴 R", min_value=0, value=defaults[cmc]['R'], step=1, key=f"r_{cmc}")
+        g = c5.number_input("🟢 G", min_value=0, value=defaults[cmc]['G'], step=1, key=f"g_{cmc}")
         
         total_magicas_input += magicas
         
@@ -144,7 +154,9 @@ with col_esquerda:
         for cor in sorted(pesos_cores.keys()):
             proporcao = pesos_cores[cor] / total_pesos
             fontes = round(proporcao * terrenos_reais)
-            st.write(f"**{cor}:** {fontes} fontes (Peso: {pesos_cores[cor]:.2f})")
+            # Aplicando a melhoria visual aqui no painel final também
+            nome_cor_visual = simbolos_mana.get(cor, cor)
+            st.write(f"**{nome_cor_visual}:** {fontes} fontes (Peso: {pesos_cores[cor]:.2f})")
     else:
         st.write("Deck Incolor ou sem pips cadastrados.")
     
